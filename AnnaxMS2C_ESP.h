@@ -108,8 +108,8 @@
 
 #define AnnaxMS2_FrameBufferSize 6*36*3 // für reales layout
 
-uint8_t AnnaxMS2_BrightPulseDelay = 8; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
-uint8_t AnnaxMS2_DarkPulseDelay = 0; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
+uint8_t AnnaxMS2_BrightPulseDelay = 6; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
+uint8_t AnnaxMS2_DarkPulseDelay = 1; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
 uint8_t AnnaxMS2_SPIBitOrder = MSBFIRST;
 uint8_t AnnaxMS2_FrameBuffer1[AnnaxMS2_FrameBufferSize];
 uint8_t AnnaxMS2_FrameBuffer2[AnnaxMS2_FrameBufferSize];
@@ -119,52 +119,54 @@ uint8_t AnnaxMS2_FrameBufferLayout = 0; // 0 = Bytes entlang der Zeile; 1 = Byte
 uint8_t AnnaxMS2_FrameBufferInvert = 0;
 uint16_t AnnaxMS2_RowInterval = 100; // [µs] 800 ist flimmerfrei; für Graustufen brauchst 500;
 uint8_t AnnaxMS2_InitDone = 0;
+uint8_t AnnaxMS2_UseScanRowMap = 1;
 volatile uint8_t AnnaxMS2_GlobalRow = 0;
 volatile uint8_t AnnaxMS2_SyncFlag = 0;
 volatile uint8_t AnnaxMS2_UseGreyscale = 0;
 volatile uint8_t AnnaxMS2_GreyscaleIndex = 0;
+volatile uint8_t AnnaxMS2_RowPulseDelay = 0;
 
 
 static const uint8_t AnnaxMS2_RowMaskLSF[18] = {
-	B00011110,
-	B00000001,
-	B00000000,
-	B00011111,
-	B00011001,
-	B00011010,
-	B00011011,
-	B00011100,
-	B00011101,
-	B00011000,
-	B00010111,
-	B00010110,
-	B00010101,
-	B00010100,
-	B00010011,
-	B00010010,
-	B00010001,
 	B00010000,
+	B00010001,
+	B00010010,
+	B00010011,
+	B00010100,
+	B00010101,
+	B00010110,
+	B00010111,
+	B00011000,
+	B00011110,
+	B00011101,
+	B00011100,
+	B00011011,
+	B00011010,
+	B00011001,
+	B00011111,
+	B00000000,
+	B00000001,
 };
 
 static const uint8_t AnnaxMS2_RowMaskMSF[18] = {
-	B01111000,
-	B10000000,
-	B00000000,
-	B11111000,
-	B10011000,
-	B01011000,
-	B11011000,
-	B00111000,
-	B10111000,
-	B00011000,
-	B11101000,
-	B01101000,
-	B10101000,
-	B00101000,
-	B11001000,
-	B01001000,
-	B10001000,
 	B00001000,
+	B10001000,
+	B01001000,
+	B11001000,
+	B00101000,
+	B10101000,
+	B01101000,
+	B11101000,
+	B00011000,
+	B01111000,
+	B10111000,
+	B00111000,
+	B11011000,
+	B01011000,
+	B10011000,
+	B11111000,
+	B00000000,
+	B10000000,
 };
 
 static const uint16_t AnnaxMS2_RowByteSelectorH[36] = {
@@ -263,6 +265,10 @@ void AnnaxMS2_SetBitOrder(uint8_t bitOrder) {
 	if (AnnaxMS2_InitDone) SPI.setBitOrder(bitOrder);
 }
 
+void AnnaxMS2_SetUseScanRowMap(uint8_t val) {
+	AnnaxMS2_UseScanRowMap = val;
+}
+
 void AnnaxMS2_SetFrameBufferLayout(uint8_t layout) {
 	AnnaxMS2_FrameBufferLayout = layout;
 }
@@ -294,42 +300,59 @@ void AnnaxMS2_WaitSync() {
 }
 
 
-
-void AnnaxMS2_DrawRow() {
+uint8_t debug_prev_rowmask = 0;
+ICACHE_RAM_ATTR void AnnaxMS2_DrawRow() {
 	uint8_t fpos = 0;
 	uint8_t tByte = 0;
 	uint8_t* displayBuffer = AnnaxMS2_FrontBuffer;
 	uint32_t rowBuffer32[10];
 	uint8_t *rowBuffer = (uint8_t *)&rowBuffer32; // byte-weiser Zugriff auf 
-	uint8_t row = AnnaxMS2_ScanRowMap[AnnaxMS2_GlobalRow];
-	uint8_t ledPulseWidth = AnnaxMS2_BrightPulseDelay;
+	uint8_t row = AnnaxMS2_GlobalRow;
+	uint8_t rowNext = row + 1;
+	uint8_t rowPrev = row - 1;
+	if (rowNext == 18) rowNext = 0;
+	if (rowPrev == 255) rowPrev = 17;
+	// Interlace rows;
+	if (AnnaxMS2_UseScanRowMap) {
+		row = AnnaxMS2_ScanRowMap[row];
+		rowNext = AnnaxMS2_ScanRowMap[rowNext];
+		rowPrev = AnnaxMS2_ScanRowMap[rowPrev];
+	}
+	volatile uint8_t ledPulseWidth = AnnaxMS2_RowPulseDelay;
 	volatile uint32_t * fifoPtr = &SPI1W0; // SPI1W0 - SPI1W15 32bit FIFO Buffer registers
 	uint16_t rowOffset = row * 18;
 	AnnaxMS2_SyncFlag = 0;
-	AnnaxMS2_GlobalRow++;
-	if (AnnaxMS2_GlobalRow >= 18) AnnaxMS2_GlobalRow = 0;
-
-	if (AnnaxMS2_UseGreyscale) {
-		if (AnnaxMS2_GreyscaleIndex == 0) {
-			ledPulseWidth = AnnaxMS2_BrightPulseDelay;
-		}
-		else {
-			ledPulseWidth = AnnaxMS2_DarkPulseDelay;
-		}
-		if (AnnaxMS2_GlobalRow == 0) AnnaxMS2_GreyscaleIndex ^= 0x01;
-		if (AnnaxMS2_GreyscaleIndex == 0) {
-			displayBuffer = AnnaxMS2_FrontBuffer;
-		}
-		else {
-			displayBuffer = AnnaxMS2_BackBuffer;
-		}
-	}
 
 	// LED wird während der Vorbereitung der neuen Daten gepulst und zeigt somit die 
 	// Zeile des vorigen Laufs an!
 	AnnaxMS2_LED_HIGH;
 	delayMicroseconds(ledPulseWidth);
 	AnnaxMS2_LED_LOW;
+
+	if (AnnaxMS2_UseGreyscale) {
+		if (AnnaxMS2_GlobalRow == 0) AnnaxMS2_GreyscaleIndex ^= 0x01;
+		if (AnnaxMS2_GreyscaleIndex == 0) {
+			displayBuffer = AnnaxMS2_FrontBuffer;
+		}
+		else 
+		{
+			displayBuffer = AnnaxMS2_BackBuffer;
+		}
+		if (AnnaxMS2_GlobalRow == 1) {
+			if (AnnaxMS2_GreyscaleIndex == 0) {
+				AnnaxMS2_RowPulseDelay = AnnaxMS2_BrightPulseDelay;
+			}
+			else {
+				AnnaxMS2_RowPulseDelay = AnnaxMS2_DarkPulseDelay;
+			}
+		}
+	}
+	else 
+	{
+		AnnaxMS2_RowPulseDelay = AnnaxMS2_BrightPulseDelay;
+	}
+
+
 
 	if (AnnaxMS2_FrameBufferLayout == 0) {
 		// Bytes Zeilenweise
@@ -413,8 +436,8 @@ void AnnaxMS2_DrawRow() {
 
 	if (AnnaxMS2_GlobalRow == 0) AnnaxMS2_SyncFlag = 1; // Sync an, da letzte Zeile in RAM gelesen wurde
 
-	if (AnnaxMS2_SPIBitOrder == LSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskLSF[row];
-	if (AnnaxMS2_SPIBitOrder == MSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskMSF[row];
+	if (AnnaxMS2_SPIBitOrder == LSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskLSF[rowPrev];
+	if (AnnaxMS2_SPIBitOrder == MSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskMSF[rowPrev];
 
 	fifoPtr[0] = rowBuffer32[0];
 	fifoPtr[1] = rowBuffer32[1];
@@ -429,6 +452,8 @@ void AnnaxMS2_DrawRow() {
 
 	SPI1CMD |= SPIBUSY; // Start sending via SPI from FIFO
 
+	AnnaxMS2_GlobalRow++;
+	if (AnnaxMS2_GlobalRow >= 18) AnnaxMS2_GlobalRow = 0;
 }
 
 
