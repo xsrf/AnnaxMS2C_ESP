@@ -304,6 +304,7 @@ void AnnaxMS2_DrawRow() {
 	uint8_t row = AnnaxMS2_ScanRowMap[AnnaxMS2_GlobalRow];
 	uint8_t ledPulseWidth = AnnaxMS2_BrightPulseDelay;
 	volatile uint32_t * fifoPtr = &SPI1W0; // SPI1W0 - SPI1W15 32bit FIFO Buffer registers
+	uint16_t rowOffset = row * 18;
 	AnnaxMS2_SyncFlag = 0;
 	AnnaxMS2_GlobalRow++;
 	if (AnnaxMS2_GlobalRow >= 18) AnnaxMS2_GlobalRow = 0;
@@ -327,36 +328,106 @@ void AnnaxMS2_DrawRow() {
 	// LED wird während der Vorbereitung der neuen Daten gepulst und zeigt somit die 
 	// Zeile des vorigen Laufs an!
 	AnnaxMS2_LED_HIGH;
-	// 60µs für folgendes for()
+	delayMicroseconds(ledPulseWidth);
+	AnnaxMS2_LED_LOW;
+
 	if (AnnaxMS2_FrameBufferLayout == 0) {
 		// Bytes Zeilenweise
-		for (uint8_t col = 0; col < 36; col++) {
-			rowBuffer[col] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[col] + row * 18];
-			if (col == ledPulseWidth) AnnaxMS2_LED_LOW;
-		}
+		rowBuffer[0] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[0] + rowOffset];
+		rowBuffer[1] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[1] + rowOffset];
+		rowBuffer[2] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[2] + rowOffset];
+		rowBuffer[3] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[3] + rowOffset];
+		rowBuffer[4] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[4] + rowOffset];
+		rowBuffer[5] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[5] + rowOffset];
+		rowBuffer[6] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[6] + rowOffset];
+		rowBuffer[7] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[7] + rowOffset];
+		rowBuffer[8] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[8] + rowOffset];
+		rowBuffer[9] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[9] + rowOffset];
+		rowBuffer[10] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[10] + rowOffset];
+		rowBuffer[11] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[11] + rowOffset];
+		rowBuffer[12] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[12] + rowOffset];
+		rowBuffer[13] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[13] + rowOffset];
+		rowBuffer[14] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[14] + rowOffset];
+		rowBuffer[15] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[15] + rowOffset];
+		rowBuffer[16] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[16] + rowOffset];
+		rowBuffer[17] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[17] + rowOffset];
+		rowBuffer[18] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[18] + rowOffset];
+		rowBuffer[19] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[19] + rowOffset];
+		rowBuffer[20] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[20] + rowOffset];
+		rowBuffer[21] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[21] + rowOffset];
+		rowBuffer[22] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[22] + rowOffset];
+		rowBuffer[23] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[23] + rowOffset];
+		rowBuffer[24] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[24] + rowOffset];
+		rowBuffer[25] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[25] + rowOffset];
+		rowBuffer[26] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[26] + rowOffset];
+		rowBuffer[27] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[27] + rowOffset];
+		rowBuffer[28] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[28] + rowOffset];
+		rowBuffer[29] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[29] + rowOffset];
+		rowBuffer[30] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[30] + rowOffset];
+		rowBuffer[31] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[31] + rowOffset];
+		rowBuffer[32] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[32] + rowOffset];
+		rowBuffer[33] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[33] + rowOffset];
+		rowBuffer[34] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[34] + rowOffset];
+		rowBuffer[35] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorH[35] + rowOffset];
 	}
 	else {
 		// Bytes Spaltenweise
-		for (uint8_t col = 0; col < 36; col++) {
-			rowBuffer[col] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[col] + row];
-			if (col == ledPulseWidth) AnnaxMS2_LED_LOW;
-		}
+		rowBuffer[0] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[0] + row];
+		rowBuffer[1] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[1] + row];
+		rowBuffer[2] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[2] + row];
+		rowBuffer[3] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[3] + row];
+		rowBuffer[4] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[4] + row];
+		rowBuffer[5] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[5] + row];
+		rowBuffer[6] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[6] + row];
+		rowBuffer[7] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[7] + row];
+		rowBuffer[8] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[8] + row];
+		rowBuffer[9] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[9] + row];
+		rowBuffer[10] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[10] + row];
+		rowBuffer[11] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[11] + row];
+		rowBuffer[12] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[12] + row];
+		rowBuffer[13] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[13] + row];
+		rowBuffer[14] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[14] + row];
+		rowBuffer[15] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[15] + row];
+		rowBuffer[16] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[16] + row];
+		rowBuffer[17] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[17] + row];
+		rowBuffer[18] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[18] + row];
+		rowBuffer[19] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[19] + row];
+		rowBuffer[20] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[20] + row];
+		rowBuffer[21] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[21] + row];
+		rowBuffer[22] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[22] + row];
+		rowBuffer[23] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[23] + row];
+		rowBuffer[24] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[24] + row];
+		rowBuffer[25] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[25] + row];
+		rowBuffer[26] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[26] + row];
+		rowBuffer[27] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[27] + row];
+		rowBuffer[28] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[28] + row];
+		rowBuffer[29] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[29] + row];
+		rowBuffer[30] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[30] + row];
+		rowBuffer[31] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[31] + row];
+		rowBuffer[32] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[32] + row];
+		rowBuffer[33] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[33] + row];
+		rowBuffer[34] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[34] + row];
+		rowBuffer[35] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[35] + row];
 	}
-	AnnaxMS2_LED_LOW;
+
 
 	if (AnnaxMS2_GlobalRow == 0) AnnaxMS2_SyncFlag = 1; // Sync an, da letzte Zeile in RAM gelesen wurde
 
 	if (AnnaxMS2_SPIBitOrder == LSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskLSF[row];
 	if (AnnaxMS2_SPIBitOrder == MSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskMSF[row];
-	//rowBuffer[35] = rowBuffer[36];
-	//rowBuffer[34] = row;
 
-	for (uint8_t i = 0; i<11; i++) {
-		*fifoPtr = rowBuffer32[i];
-		fifoPtr++;
-	}
+	fifoPtr[0] = rowBuffer32[0];
+	fifoPtr[1] = rowBuffer32[1];
+	fifoPtr[2] = rowBuffer32[2];
+	fifoPtr[3] = rowBuffer32[3];
+	fifoPtr[4] = rowBuffer32[4];
+	fifoPtr[5] = rowBuffer32[5];
+	fifoPtr[6] = rowBuffer32[6];
+	fifoPtr[7] = rowBuffer32[7];
+	fifoPtr[8] = rowBuffer32[8];
+	fifoPtr[9] = rowBuffer32[9];
 
-	SPI1CMD |= SPIBUSY; // Sends first byte from FIFO
+	SPI1CMD |= SPIBUSY; // Start sending via SPI from FIFO
 
 }
 
