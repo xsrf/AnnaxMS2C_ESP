@@ -39,7 +39,7 @@
  *
 */
  
-#include <AnnaxMS2C.h>
+#include <AnnaxMS2C_ESP.h>
 uint8_t* frontBuffer;
 
 void setup() { 

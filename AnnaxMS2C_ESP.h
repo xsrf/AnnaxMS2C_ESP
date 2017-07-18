@@ -272,12 +272,12 @@ void AnnaxMS2_SetFrameBufferInvert(uint8_t inv) {
 }
 
 void AnnaxMS2_SetBrightPulseDelay(uint8_t val) {
-	if (val > 40) val = 40;
+	if (val > 15) val = 15;
 	AnnaxMS2_BrightPulseDelay = val;
 }
 
 void AnnaxMS2_SetDarkPulseDelay(uint8_t val) {
-	if (val > 40) val = 40;
+	if (val > 15) val = 15;
 	AnnaxMS2_DarkPulseDelay = val;
 }
 
