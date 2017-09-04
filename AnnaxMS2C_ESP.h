@@ -15,7 +15,7 @@
 *              ___
 *    Vcc / 5V |· ·| Vcc / 5V
 *         SCK |· ·| GND
-*         RCK |· ·| CS3 / GND
+*         RCK |· ·| GND
 *         LED |· ·  RS4
 *         RS0 |· ·  RS1
 *         RS2 |· ·| RS3
@@ -27,14 +27,12 @@
 * Daten aus SDA1-SDA4 (nur ein Datenkanal wird genutzt, Auswahl erfolgt über DIP-Schalter)
 * ins Speicherregister.
 *
-* RCK übernimmt, bei steigender Flanke, die Daten der Schieberegister an deren Ausgänge.
+* RCK übernimmt, bei fallender Flanke, die Daten der Schieberegister an deren Ausgänge. (SPI MODE2)
 *
 * RS0-RS4 sind Eingänge eines Demultiplexer zur Auswahl der Zeile 1-18
 *
 * LED aktiviert die LEDs der gewählten Zeile solange es HIGH gesetzt ist. Etwa 1-15µs pulsen!
-* (Es ist unklar ob die LEDs durch zu lange Pulse beschädigt werden können... Vorsicht!)
-*
-* CS3/GND lag permanent auf GND, geht an CS3 eines Demultiplexers... unbekannte Funktion.
+* LED ist mir RC-Glied vor zu langen Pulsen geschützt - sollte trotzdem vermieden werden!
 *
 * Zur Ansteuerung aller drei Module als ein Panel werden diese einfach kaskadiert.
 * Dazu den Ausgang des ersten Moduls mit dem Eingang des zweiten Moduls verbinden.
@@ -45,38 +43,26 @@
 * Schieberegister 74HC595 angesteuert werden.
 *
 * Verkabelung:
-* Arduino PIN 9 an LED Panel an PIN LED
-* Arduino PIN 8 an LED Panel an PIN RCK (und an 74HC595 an RCLK)
-* Arduino PIN 13 (SCK) an LED Panel an SCK (und an 74HC595 an SRCLK)
-* Arduino PIN 11 (MOSI) an SDA1 (oder an 74HC595 an SER)
-* Mit Schieberegister:
-* 74HC595 PIN QH' an LED Panel SDA1
-* 74HC595 PIN QH an LED Panel RS0
-* 74HC595 PIN QG an LED Panel RS1
-* 74HC595 PIN QF an LED Panel RS2
-* 74HC595 PIN QE an LED Panel RS3
-* 74HC595 PIN QD an LED Panel RS4
 *
-* ESP 8266 / WeMos D1  | 74HC595         | ANNAX LED-MS2
-* ------------------------------------------------------
-* GND                    GND               GND
-* VCC                    VCC               VCC
-* SCK / 13               SRCLK             SCK
-* MOSI / 11              SER               -
-* -                      QH'               SDA1
-* 8                      SRCLK             RCK
-* 9                      -                 LED
-* -                      QH                RS0
-* -                      QG                RS1
-* -                      QF                RS2
-* -                      QE                RS3
-* -                      QD                RS4
+* ESP 8266 | WeMos D1 | ANNAX LED-MS2
+* -----------------------------------
+* GND        GND        GND
+* ---        5V         VCC
+* GPIO 14    D5         SCK
+* GPIO 13    D7         SDA1
+* GPIO 15    D8         RCK
+* GPIO 2     D4         LED
+* GPIO 0     D3         RS0
+* GPIO 12    D6         RS1
+* GPIO 16    D0         RS2
+* GPIO 4     D2         RS3 (Pull-Up!)
+* GPIO 5     D1         RS4 (Pull-Down!)
 *
 *
 *
 * Ablauf im Programmcode:
 * -----------------------
-* Mittels Timer-Interrupt wird alle ~1ms (Wert anpassbar) die Prozedur DrawRow() aufgerufen.
+* Mittels Timer-Interrupt wird alle ~100µs (Wert anpassbar) die Prozedur DrawRow() aufgerufen.
 * Von dieser werden die Daten einer einzelnen logischen Zeile (entspricht physikalische Zeile N und N+18)
 * via SPI (SCK/MOSI) in die Schieberegister geschrieben (Taktrate 4-8MHz).
 * Anschließend erfolgt die Auswahl der Zeile via RS0-RS4 (ggf. durch schreiben
@@ -85,6 +71,7 @@
 * LED wird kurz HIGH gepulst (1-10µs) wodurch die gesetzten LEDs der Zeile aufleuchten.
 * Beim nächsten Aufruf wird die nächste Zeile geschrieben, usw...
 * Nach 18 Zeilen wird der Frame erneut wiederholt.
+* Wichtig, wenn Daten der Zeile N geschrieben und gelatched wurden, muss Zeile N-1 selektiert werden.
 *
 * Features:
 * ---------
@@ -103,13 +90,10 @@
 #include <Arduino.h>
 #include <SPI.h>
 
-#define AnnaxMS2_LED_LOW  GPOC = 1 << 12;	
-#define AnnaxMS2_LED_HIGH GPOS = 1 << 12;
-
 #define AnnaxMS2_FrameBufferSize 6*36*3 // für reales layout
 
-uint8_t AnnaxMS2_BrightPulseDelay = 6; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
-uint8_t AnnaxMS2_DarkPulseDelay = 1; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
+uint8_t AnnaxMS2_BrightPulseDelay = 7; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
+uint8_t AnnaxMS2_DarkPulseDelay = 2; // Pulsbreite (in Verarbeitungsschritten, siehe unten); über 15 klingt gefährlich
 uint8_t AnnaxMS2_SPIBitOrder = MSBFIRST;
 uint8_t AnnaxMS2_FrameBuffer1[AnnaxMS2_FrameBufferSize];
 uint8_t AnnaxMS2_FrameBuffer2[AnnaxMS2_FrameBufferSize];
@@ -117,9 +101,9 @@ uint8_t* AnnaxMS2_FrontBuffer = AnnaxMS2_FrameBuffer1;
 uint8_t* AnnaxMS2_BackBuffer = AnnaxMS2_FrameBuffer2;
 uint8_t AnnaxMS2_FrameBufferLayout = 0; // 0 = Bytes entlang der Zeile; 1 = Bytes spaltenweise
 uint8_t AnnaxMS2_FrameBufferInvert = 0;
-uint16_t AnnaxMS2_RowInterval = 100; // [µs] 800 ist flimmerfrei; für Graustufen brauchst 500;
+uint16_t AnnaxMS2_RowInterval = 100; // [µs] 800 ist flimmerfrei; für Graustufen brauchts 500;
 uint8_t AnnaxMS2_InitDone = 0;
-uint8_t AnnaxMS2_UseScanRowMap = 1;
+uint8_t AnnaxMS2_UseScanRowMap = 0;
 volatile uint8_t AnnaxMS2_GlobalRow = 0;
 volatile uint8_t AnnaxMS2_SyncFlag = 0;
 volatile uint8_t AnnaxMS2_UseGreyscale = 0;
@@ -127,7 +111,7 @@ volatile uint8_t AnnaxMS2_GreyscaleIndex = 0;
 volatile uint8_t AnnaxMS2_RowPulseDelay = 0;
 
 
-static const uint8_t AnnaxMS2_RowMaskLSF[18] = {
+static const uint8_t AnnaxMS2_RowMask[18] = {
 	B00010000,
 	B00010001,
 	B00010010,
@@ -146,27 +130,6 @@ static const uint8_t AnnaxMS2_RowMaskLSF[18] = {
 	B00011111,
 	B00000000,
 	B00000001,
-};
-
-static const uint8_t AnnaxMS2_RowMaskMSF[18] = {
-	B00001000,
-	B10001000,
-	B01001000,
-	B11001000,
-	B00101000,
-	B10101000,
-	B01101000,
-	B11101000,
-	B00011000,
-	B01111000,
-	B10111000,
-	B00111000,
-	B11011000,
-	B01011000,
-	B10011000,
-	B11111000,
-	B00000000,
-	B10000000,
 };
 
 static const uint16_t AnnaxMS2_RowByteSelectorH[36] = {
@@ -196,14 +159,22 @@ void AnnaxMS2_Init();
 
 
 void AnnaxMS2_Init() {
+	// https://github.com/esp8266/Arduino/blob/master/cores/esp8266/esp8266_peri.h#L189
+	// Setup SPI
 	SPI.begin();
-	SPI.setDataMode(SPI_MODE0);
-	SPI.setHwCs(true); // Enable Select ActiveLow on D8 / IO15 / CS / HSPI_CS used for RCK
+	SPI.setDataMode(SPI_MODE3);
+	SPI.setHwCs(false); // Disable CS on D8 / IO15 / CS / HSPI_CS used for RCK
 	SPI.setFrequency(8e6);
-	SPI1U = SPIUMOSI | SPIUCSHOLD; // MOSI mode; Keep CS low after SPI Clock for some cycles
 	SPI1U1 &= ~(SPIMMOSI << SPILMOSI); // Clear MOSI length
-	SPI1U1 |= ((37 * 8 - 1) << SPILMOSI); // Set MOSI length to 37 bytes
-	pinMode(12, OUTPUT);
+	SPI1U1 |= ((36 * 8 - 1) << SPILMOSI); // Set MOSI length to 36 bytes
+
+	// Setup UART1
+	Serial1.begin(250000); // 500.000 = 2µs pro symbol
+	U1F = 0xFF;
+	U1S |= 0x08 << USTXC; // Set TX FIFO counter to 8 bits
+	U1C0 |= 1 << UCTXI; // Invert TX 
+	U1D = 80 * 5; // 5µs
+
 	timer1_disable();
 	timer1_attachInterrupt(AnnaxMS2_DrawRow);
 	timer1_isr_init();
@@ -220,6 +191,14 @@ void AnnaxMS2_Init() {
 	AnnaxMS2_BackBuffer[630] = B10000111;
 	AnnaxMS2_BackBuffer[647] = B11110001;
 	AnnaxMS2_BackBuffer[1] = B00001111;
+
+	pinMode(0, OUTPUT);
+	pinMode(4, OUTPUT);
+	pinMode(5, OUTPUT);
+	pinMode(12, OUTPUT);
+	pinMode(15, OUTPUT);
+	pinMode(16, OUTPUT);
+
 	AnnaxMS2_InitDone = 1;
 }
 
@@ -233,15 +212,21 @@ uint8_t* AnnaxMS2_GetBackBuffer() {
 
 
 void AnnaxMS2_SetRowInterval(uint16_t val) {
-	if (val < 300) val = 300;
+	if (val < 50) val = 50;
 	AnnaxMS2_RowInterval = val;
-	//if (AnnaxMS2_InitDone) Timer1.setPeriod(val);
+	if (AnnaxMS2_InitDone) {
+		timer1_disable();
+		timer1_attachInterrupt(AnnaxMS2_DrawRow);
+		timer1_isr_init();
+		timer1_enable(TIM_DIV1, TIM_EDGE, TIM_LOOP);
+		timer1_write(AnnaxMS2_RowInterval * 80);
+	}
 }
 
 void AnnaxMS2_SwapBuffer() {
 	uint8_t* tmp;
 	tmp = AnnaxMS2_FrontBuffer;
-	while (AnnaxMS2_GlobalRow>0); // wait for sync!
+	while (!AnnaxMS2_SyncFlag); // wait for sync!
 	AnnaxMS2_FrontBuffer = AnnaxMS2_BackBuffer;
 	AnnaxMS2_BackBuffer = tmp;
 }
@@ -249,7 +234,7 @@ void AnnaxMS2_SwapBuffer() {
 void AnnaxMS2_SwapBufferCopy() {
 	uint8_t* tmp;
 	tmp = AnnaxMS2_FrontBuffer;
-	while (AnnaxMS2_GlobalRow>0); // wait for sync!
+	while (!AnnaxMS2_SyncFlag); // wait for sync!
 	AnnaxMS2_FrontBuffer = AnnaxMS2_BackBuffer;
 	AnnaxMS2_BackBuffer = tmp;
 	for (uint16_t i = 0; i < AnnaxMS2_FrameBufferSize; i++) AnnaxMS2_BackBuffer[i] = AnnaxMS2_FrontBuffer[i];
@@ -300,59 +285,49 @@ void AnnaxMS2_WaitSync() {
 }
 
 
-uint8_t debug_prev_rowmask = 0;
+volatile uint8_t row = 0; // Physische Zeile
 ICACHE_RAM_ATTR void AnnaxMS2_DrawRow() {
 	uint8_t fpos = 0;
 	uint8_t tByte = 0;
 	uint8_t* displayBuffer = AnnaxMS2_FrontBuffer;
 	uint32_t rowBuffer32[10];
 	uint8_t *rowBuffer = (uint8_t *)&rowBuffer32; // byte-weiser Zugriff auf 
-	uint8_t row = AnnaxMS2_GlobalRow;
-	uint8_t rowNext = row + 1;
-	uint8_t rowPrev = row - 1;
-	if (rowNext == 18) rowNext = 0;
-	if (rowPrev == 255) rowPrev = 17;
-	// Interlace rows;
-	if (AnnaxMS2_UseScanRowMap) {
-		row = AnnaxMS2_ScanRowMap[row];
-		rowNext = AnnaxMS2_ScanRowMap[rowNext];
-		rowPrev = AnnaxMS2_ScanRowMap[rowPrev];
-	}
-	volatile uint8_t ledPulseWidth = AnnaxMS2_RowPulseDelay;
-	volatile uint32_t * fifoPtr = &SPI1W0; // SPI1W0 - SPI1W15 32bit FIFO Buffer registers
-	uint16_t rowOffset = row * 18;
-	AnnaxMS2_SyncFlag = 0;
 
-	// LED wird während der Vorbereitung der neuen Daten gepulst und zeigt somit die 
-	// Zeile des vorigen Laufs an!
-	AnnaxMS2_LED_HIGH;
-	delayMicroseconds(ledPulseWidth);
-	AnnaxMS2_LED_LOW;
+	// RCK pulsen und Zeilenwahl festlegen. Damit liegen Daten des vorigen Laufs an!
+	GPOC = 0x9031; // 1001 0000 0011 0001 // Clear GPIO 0,4,5,12,15 LOW
+	GP16O &= ~1; // Clear GPIO16
+	GPOS = (1 & (AnnaxMS2_RowMask[row] >> 0)) << 0; // GPIO 0 / RS0
+	GPOS = (1 & (AnnaxMS2_RowMask[row] >> 1)) << 12; // GPIO 12 / RS1
+	GP16O |= 1 & (AnnaxMS2_RowMask[row] >> 2); // GPIO 16 / RS2
+	GPOS = (1 & (AnnaxMS2_RowMask[row] >> 3)) << 4; // GPIO 4 / RS3
+	GPOS = (1 & (AnnaxMS2_RowMask[row] >> 4)) << 5; // GPIO 5 / RS4
+	GPOS = (1 << 15) ; // GPIO GPIO15 HIGH (RCK Pulse)
+
+	// LED Pulsdauer einstellen
+	U1D = 80 * AnnaxMS2_BrightPulseDelay;
+	if (AnnaxMS2_UseGreyscale && AnnaxMS2_GreyscaleIndex) U1D = 80 * AnnaxMS2_DarkPulseDelay;
+	// Alles vorbereitet, LED Puls folgt ganz am Ende um Daten/Zeilensignalen noch etwas Zeit zu geben
+	
+	
+	// *** Nächste Zeile ermitteln ***
+	// Interlace rows;
+	AnnaxMS2_GlobalRow++;
+	if (AnnaxMS2_GlobalRow >= 18) AnnaxMS2_GlobalRow = 0;
+	if (AnnaxMS2_UseScanRowMap) {
+		row = AnnaxMS2_ScanRowMap[AnnaxMS2_GlobalRow];
+	}
+	else {
+		row = AnnaxMS2_GlobalRow;
+	}
 
 	if (AnnaxMS2_UseGreyscale) {
 		if (AnnaxMS2_GlobalRow == 0) AnnaxMS2_GreyscaleIndex ^= 0x01;
-		if (AnnaxMS2_GreyscaleIndex == 0) {
-			displayBuffer = AnnaxMS2_FrontBuffer;
-		}
-		else 
-		{
-			displayBuffer = AnnaxMS2_BackBuffer;
-		}
-		if (AnnaxMS2_GlobalRow == 1) {
-			if (AnnaxMS2_GreyscaleIndex == 0) {
-				AnnaxMS2_RowPulseDelay = AnnaxMS2_BrightPulseDelay;
-			}
-			else {
-				AnnaxMS2_RowPulseDelay = AnnaxMS2_DarkPulseDelay;
-			}
-		}
-	}
-	else 
-	{
-		AnnaxMS2_RowPulseDelay = AnnaxMS2_BrightPulseDelay;
+		if (AnnaxMS2_GreyscaleIndex) displayBuffer = AnnaxMS2_BackBuffer;
 	}
 
-
+	volatile uint32_t * fifoPtr = &SPI1W0; // SPI1W0 - SPI1W15 32bit FIFO Buffer registers
+	uint16_t rowOffset = row * 18;
+	AnnaxMS2_SyncFlag = 0;
 
 	if (AnnaxMS2_FrameBufferLayout == 0) {
 		// Bytes Zeilenweise
@@ -433,11 +408,7 @@ ICACHE_RAM_ATTR void AnnaxMS2_DrawRow() {
 		rowBuffer[35] = AnnaxMS2_FrameBufferInvert ^ displayBuffer[AnnaxMS2_RowByteSelectorV[35] + row];
 	}
 
-
-	if (AnnaxMS2_GlobalRow == 0) AnnaxMS2_SyncFlag = 1; // Sync an, da letzte Zeile in RAM gelesen wurde
-
-	if (AnnaxMS2_SPIBitOrder == LSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskLSF[rowPrev];
-	if (AnnaxMS2_SPIBitOrder == MSBFIRST) rowBuffer[36] = AnnaxMS2_RowMaskMSF[rowPrev];
+	if (AnnaxMS2_GlobalRow == 17) AnnaxMS2_SyncFlag = 1; // Sync an, da letzte Zeile in RAM gelesen wurde
 
 	fifoPtr[0] = rowBuffer32[0];
 	fifoPtr[1] = rowBuffer32[1];
@@ -448,12 +419,9 @@ ICACHE_RAM_ATTR void AnnaxMS2_DrawRow() {
 	fifoPtr[6] = rowBuffer32[6];
 	fifoPtr[7] = rowBuffer32[7];
 	fifoPtr[8] = rowBuffer32[8];
-	fifoPtr[9] = rowBuffer32[9];
 
 	SPI1CMD |= SPIBUSY; // Start sending via SPI from FIFO
-
-	AnnaxMS2_GlobalRow++;
-	if (AnnaxMS2_GlobalRow >= 18) AnnaxMS2_GlobalRow = 0;
+	U1F = 0xFF; // LED Pulse
 }
 
 
