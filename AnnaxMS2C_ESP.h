@@ -164,7 +164,14 @@ void AnnaxMS2_Init() {
 	// https://github.com/esp8266/Arduino/blob/master/cores/esp8266/esp8266_peri.h#L189
 	// SPI zur Datenübertragung in Register
 	SPI.begin();
-	SPI.setDataMode(SPI_MODE3);
+	/*
+		SPI DataMode 2/3 was changed in PlatformIO platformio/espressif8266@2.1.0 / Arduino Core 2.5.1
+		https://github.com/platformio/platform-espressif8266/releases/tag/v2.1.0
+		https://github.com/esp8266/Arduino/releases/tag/2.5.1
+	*/
+	//SPI.setDataMode(SPI_MODE3);
+	SPI1U |= (SPIUSME);
+	SPI1P |= 1<<29;
 	SPI.setHwCs(false); // Disable CS on D8 / IO15 / CS / HSPI_CS used for RCK
 	SPI.setFrequency(8e6);
 	SPI1U1 &= ~(SPIMMOSI << SPILMOSI); // Clear MOSI length
